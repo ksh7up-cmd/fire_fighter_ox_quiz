@@ -337,6 +337,34 @@ export default function App() {
     loadAll();
   }, []);
 
+  useEffect(() => {
+    async function loadMedia() {
+      const [photos, videos] = await Promise.all([
+        api.getMediaLinks("photo"),
+        api.getMediaLinks("video")
+      ]);
+      setMediaLinks({ photo: photos, video: videos });
+    }
+    loadMedia();
+  }, []);
+
+  async function saveMediaLink() {
+    if (!newMediaTitle.trim() || !newMediaUrl.trim()) return;
+    setSavingMedia(true);
+    try {
+      const rows = await api.addMediaLink(adminMediaTab, newMediaTitle.trim(), newMediaUrl.trim());
+      const newItem = rows[0];
+      setMediaLinks(prev => ({ ...prev, [adminMediaTab]: [newItem, ...prev[adminMediaTab]] }));
+      setNewMediaTitle(""); setNewMediaUrl("");
+    } catch(e) { alert("저장 실패: " + e.message); }
+    setSavingMedia(false);
+  }
+
+  async function deleteMediaLink(id, type) {
+    await api.deleteMediaLink(id);
+    setMediaLinks(prev => ({ ...prev, [type]: prev[type].filter(m => m.id !== id) }));
+  }
+
   function getQuestions(subject, partName, chapterName) {
     const k = `${subject}|${partName}|${chapterName}`;
     return allQuestions[k] || [];
@@ -1079,40 +1107,20 @@ export default function App() {
                 { icon: "📌", label: "오답노트", sub: `${wrongAnswerIds.length}개 저장됨`, action: () => setTab("weak") },
                 { icon: "📸", label: "소방시설 사진", sub: "기구 정리", action: () => setTab("photo") },
                 { icon: "▶️", label: "유튜브 강의", sub: "이해 영상", action: () => setTab("video") },
+                { icon: "☕", label: "영철소방 카페", sub: "cafe.naver.com", action: () => window.open("https://cafe.naver.com/lyc119", "_blank") },
               ].map(item => (
                 <button key={item.label} onClick={item.action} style={{
-                  background: "#111", border: "1px solid #222", borderRadius: 12, padding: "14px 12px",
+                  background: item.label === "영철소방 카페" ? "linear-gradient(135deg, #03C75A22, #03C75A11)" : "#111",
+                  border: item.label === "영철소방 카페" ? "1px solid #03C75A55" : "1px solid #222",
+                  borderRadius: 12, padding: "14px 12px",
                   display: "flex", flexDirection: "column", gap: 4, textAlign: "left", cursor: "pointer"
                 }}>
                   <div style={{ fontSize: 22 }}>{item.icon}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{item.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: item.label === "영철소방 카페" ? "#03C75A" : "#fff" }}>{item.label}</div>
                   <div style={{ fontSize: 11, color: "#666" }}>{item.sub}</div>
                 </button>
               ))}
             </div>
-
-            {/* 네이버 카페 버튼 */}
-            <a href="https://cafe.naver.com/lyc119" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
-              <div style={{
-                marginTop: 8,
-                background: "linear-gradient(135deg, #03C75A22, #03C75A11)",
-                border: "1px solid #03C75A55",
-                borderRadius: 12, padding: "14px 16px",
-                display: "flex", alignItems: "center", gap: 12, cursor: "pointer"
-              }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-                  background: "#03C75A",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 22
-                }}>☕</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: "#03C75A" }}>영철소방 네이버 카페</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>cafe.naver.com/lyc119</div>
-                </div>
-                <div style={{ marginLeft: "auto", fontSize: 16, color: "#03C75A" }}>›</div>
-              </div>
-            </a>
           </div>
         )}
 
@@ -1161,19 +1169,40 @@ export default function App() {
         {tab === "photo" && (
           <div style={{ padding: 16 }}>
             <div style={{ fontSize: 12, color: "#FF4444", fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>📸 소방시설 기구 정리</div>
-            {["스프링클러 헤드", "옥내소화전함", "감지기 종류", "유도등"].map(item => (
-              <div key={item} style={{
-                background: "#111", border: "1px solid #1e1e1e",
-                borderRadius: 12, marginBottom: 10,
-                display: "flex", alignItems: "center", gap: 12, padding: 12
-              }}>
-                <div style={{ width: 60, height: 60, borderRadius: 8, background: "linear-gradient(135deg, #1a0000, #2a0000)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🔧</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{item}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>사진 준비 중</div>
-                </div>
-                <div style={{ marginLeft: "auto", fontSize: 18, color: "#333" }}>›</div>
+            {isAdmin && (
+              <div style={{ background: "#111", border: "1px solid #333", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: "#8888FF", fontWeight: 700, marginBottom: 10 }}>+ 사진 링크 추가 (관리자)</div>
+                <input placeholder="제목 (예: 스프링클러 헤드 종류)" value={adminMediaTab === "photo" ? newMediaTitle : ""} onChange={e => { setAdminMediaTab("photo"); setNewMediaTitle(e.target.value); }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #222", background: "#0d0d0d", color: "#fff", fontSize: 12, marginBottom: 8, outline: "none", boxSizing: "border-box" }} />
+                <input placeholder="링크 URL (이미지 URL 또는 웹페이지)" value={adminMediaTab === "photo" ? newMediaUrl : ""} onChange={e => { setAdminMediaTab("photo"); setNewMediaUrl(e.target.value); }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #222", background: "#0d0d0d", color: "#fff", fontSize: 12, marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+                <button onClick={() => { setAdminMediaTab("photo"); saveMediaLink(); }} disabled={savingMedia} style={{
+                  width: "100%", padding: "10px", borderRadius: 8, border: "none",
+                  background: "linear-gradient(135deg, #5555FF, #8888FF)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                }}>{savingMedia ? "저장 중..." : "+ 저장"}</button>
               </div>
+            )}
+            {mediaLinks.photo.length === 0 ? (
+              <div style={{ background: "#111", borderRadius: 12, padding: 30, textAlign: "center", color: "#555" }}>
+                등록된 사진이 없어요<br /><span style={{ fontSize: 11, color: "#444" }}>관리자가 링크를 추가하면 여기에 표시돼요</span>
+              </div>
+            ) : mediaLinks.photo.map(item => (
+              <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, marginBottom: 10, display: "flex", alignItems: "center", gap: 12, padding: 14 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 8, background: "linear-gradient(135deg, #1a0000, #2a0000)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📸</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{item.title}</div>
+                    <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>탭하여 보기</div>
+                  </div>
+                  {isAdmin && (
+                    <button onClick={e => { e.preventDefault(); deleteMediaLink(item.id, "photo"); }} style={{
+                      background: "rgba(255,68,68,0.1)", border: "1px solid rgba(255,68,68,0.3)",
+                      borderRadius: 6, padding: "3px 8px", color: "#FF4444", fontSize: 10, cursor: "pointer"
+                    }}>삭제</button>
+                  )}
+                  <div style={{ fontSize: 16, color: "#333" }}>›</div>
+                </div>
+              </a>
             ))}
           </div>
         )}
@@ -1182,22 +1211,57 @@ export default function App() {
         {tab === "video" && (
           <div style={{ padding: 16 }}>
             <div style={{ fontSize: 12, color: "#FF4444", fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>▶️ 이해 보충 영상</div>
-            {[
-              { title: "연소론 핵심 정리", part: "소방학 Part 1", duration: "23:14" },
-              { title: "소화약제 한방 정리", part: "소방학 Part 2", duration: "18:40" },
-              { title: "소방기본법 요약", part: "관계법규 Part 1", duration: "15:22" },
-            ].map(v => (
-              <div key={v.title} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, marginBottom: 10, overflow: "hidden" }}>
-                <div style={{ background: "linear-gradient(135deg, #1a0000, #2d0000)", height: 80, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                  <div style={{ width: 36, height: 36, background: "rgba(255,68,68,0.9)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>▶</div>
-                  <div style={{ position: "absolute", bottom: 6, right: 8, background: "rgba(0,0,0,0.7)", padding: "2px 6px", borderRadius: 4, fontSize: 11, color: "#fff" }}>{v.duration}</div>
-                </div>
-                <div style={{ padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{v.title}</div>
-                  <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{v.part}</div>
-                </div>
+            {isAdmin && (
+              <div style={{ background: "#111", border: "1px solid #333", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: "#8888FF", fontWeight: 700, marginBottom: 10 }}>+ 유튜브 링크 추가 (관리자)</div>
+                <input placeholder="제목 (예: 연소론 핵심 정리)" value={adminMediaTab === "video" ? newMediaTitle : ""} onChange={e => { setAdminMediaTab("video"); setNewMediaTitle(e.target.value); }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #222", background: "#0d0d0d", color: "#fff", fontSize: 12, marginBottom: 8, outline: "none", boxSizing: "border-box" }} />
+                <input placeholder="유튜브 URL (https://youtu.be/...)" value={adminMediaTab === "video" ? newMediaUrl : ""} onChange={e => { setAdminMediaTab("video"); setNewMediaUrl(e.target.value); }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #222", background: "#0d0d0d", color: "#fff", fontSize: 12, marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+                <button onClick={() => { setAdminMediaTab("video"); saveMediaLink(); }} disabled={savingMedia} style={{
+                  width: "100%", padding: "10px", borderRadius: 8, border: "none",
+                  background: "linear-gradient(135deg, #5555FF, #8888FF)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                }}>{savingMedia ? "저장 중..." : "+ 저장"}</button>
               </div>
-            ))}
+            )}
+            {mediaLinks.video.length === 0 ? (
+              <div style={{ background: "#111", borderRadius: 12, padding: 30, textAlign: "center", color: "#555" }}>
+                등록된 영상이 없어요<br /><span style={{ fontSize: 11, color: "#444" }}>관리자가 링크를 추가하면 여기에 표시돼요</span>
+              </div>
+            ) : mediaLinks.video.map(item => {
+              const ytId = item.url.match(/(?:youtu\.be\/|v=)([^&?/]+)/)?.[1];
+              return (
+                <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, marginBottom: 10, overflow: "hidden" }}>
+                    <div style={{ position: "relative", height: 80, background: "#1a0000", overflow: "hidden" }}>
+                      {ytId ? (
+                        <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt={item.title}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.7 }} />
+                      ) : (
+                        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <div style={{ width: 36, height: 36, background: "rgba(255,68,68,0.9)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>▶</div>
+                        </div>
+                      )}
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ width: 36, height: 36, background: "rgba(255,0,0,0.85)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>▶</div>
+                      </div>
+                    </div>
+                    <div style={{ padding: "10px 12px", display: "flex", alignItems: "center" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{item.title}</div>
+                        <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>YouTube</div>
+                      </div>
+                      {isAdmin && (
+                        <button onClick={e => { e.preventDefault(); deleteMediaLink(item.id, "video"); }} style={{
+                          background: "rgba(255,68,68,0.1)", border: "1px solid rgba(255,68,68,0.3)",
+                          borderRadius: 6, padding: "3px 8px", color: "#FF4444", fontSize: 10, cursor: "pointer"
+                        }}>삭제</button>
+                      )}
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
           </div>
         )}
       </div>

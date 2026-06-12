@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 
 const ADMIN_PASSWORD = "이영철1234";
-const SUPABASE_URL = "https://dbwuoleivsvvxzjpptpf.supabase.co";
-const SUPABASE_KEY = "sb_publishable_aMiochfFzHsaqss5334w0Q_SgPeC4bj";
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 // ── Supabase Auth 헬퍼
 const auth = {
@@ -82,7 +82,7 @@ const api = {
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return data.map(r => r.question_id);
+    return data.map(r => Number(r.question_id));
   },
   async addWrongAnswer(userId, questionId, token) {
     await fetch(`${SUPABASE_URL}/rest/v1/wrong_answers`, {
@@ -384,12 +384,13 @@ export default function App() {
 
   async function toggleWeak(questionId) {
     if (!session) return;
-    if (wrongAnswerIds.includes(questionId)) {
-      await api.removeWrongAnswer(session.user.id, questionId, session.access_token);
-      setWrongAnswerIds(prev => prev.filter(id => id !== questionId));
+    const id = Number(questionId);
+    if (wrongAnswerIds.includes(id)) {
+      await api.removeWrongAnswer(session.user.id, id, session.access_token);
+      setWrongAnswerIds(prev => prev.filter(x => x !== id));
     } else {
-      await api.addWrongAnswer(session.user.id, questionId, session.access_token);
-      setWrongAnswerIds(prev => [...prev, questionId]);
+      await api.addWrongAnswer(session.user.id, id, session.access_token);
+      setWrongAnswerIds(prev => [...prev, id]);
     }
   }
 

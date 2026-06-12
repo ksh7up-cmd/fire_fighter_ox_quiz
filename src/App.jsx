@@ -499,6 +499,42 @@ export default function App() {
   const accentColor = subject === "관계법규" ? "#0077CC" : "#CC0022";
   const accentLight = subject === "관계법규" ? "#66AAFF" : "#FF4444";
 
+  // ── 관리자 로그인 팝업 (세션 여부 관계없이 먼저 체크)
+  if (showAdminLogin) return (
+    <div style={{
+      minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0",
+      fontFamily: "'Noto Sans KR', sans-serif",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", maxWidth: 420, margin: "0 auto", padding: "0 28px"
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet" />
+      <div style={{ fontSize: 32, marginBottom: 16 }}>🔐</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color: "#fff", marginBottom: 6 }}>관리자 로그인</div>
+      <div style={{ fontSize: 12, color: "#666", marginBottom: 28 }}>문제 입력 권한이 필요합니다</div>
+      <input
+        type="password"
+        placeholder="비밀번호 입력"
+        value={adminPwInput}
+        onChange={e => setAdminPwInput(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && tryAdminLogin()}
+        style={{
+          width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #333",
+          background: "#111", color: "#fff", fontSize: 15, marginBottom: 10,
+          outline: "none", boxSizing: "border-box"
+        }}
+      />
+      {adminError && <div style={{ color: "#FF4444", fontSize: 12, marginBottom: 10 }}>{adminError}</div>}
+      <button onClick={tryAdminLogin} style={{
+        width: "100%", padding: "14px", borderRadius: 12, border: "none",
+        background: "linear-gradient(135deg, #CC0022, #FF4444)",
+        color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", marginBottom: 12
+      }}>확인</button>
+      <button onClick={() => { setShowAdminLogin(false); setAdminPwInput(""); setAdminError(""); }} style={{
+        background: "none", border: "none", color: "#666", fontSize: 13, cursor: "pointer"
+      }}>취소</button>
+    </div>
+  );
+
   // ── 로그인/회원가입 화면
   if (!session) return (
     <div style={{
@@ -569,41 +605,6 @@ export default function App() {
   );
 
   // ── 관리자 로그인 팝업
-  if (showAdminLogin) return (
-    <div style={{
-      minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0",
-      fontFamily: "'Noto Sans KR', sans-serif",
-      display: "flex", flexDirection: "column", alignItems: "center",
-      justifyContent: "center", maxWidth: 420, margin: "0 auto", padding: "0 28px"
-    }}>
-      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet" />
-      <div style={{ fontSize: 32, marginBottom: 16 }}>🔐</div>
-      <div style={{ fontSize: 18, fontWeight: 900, color: "#fff", marginBottom: 6 }}>관리자 로그인</div>
-      <div style={{ fontSize: 12, color: "#666", marginBottom: 28 }}>문제 입력 권한이 필요합니다</div>
-      <input
-        type="password"
-        placeholder="비밀번호 입력"
-        value={adminPwInput}
-        onChange={e => setAdminPwInput(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && tryAdminLogin()}
-        style={{
-          width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #333",
-          background: "#111", color: "#fff", fontSize: 15, marginBottom: 10,
-          outline: "none", boxSizing: "border-box"
-        }}
-      />
-      {adminError && <div style={{ color: "#FF4444", fontSize: 12, marginBottom: 10 }}>{adminError}</div>}
-      <button onClick={tryAdminLogin} style={{
-        width: "100%", padding: "14px", borderRadius: 12, border: "none",
-        background: "linear-gradient(135deg, #CC0022, #FF4444)",
-        color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", marginBottom: 12
-      }}>확인</button>
-      <button onClick={() => { setShowAdminLogin(false); setAdminPwInput(""); setAdminError(""); }} style={{
-        background: "none", border: "none", color: "#666", fontSize: 13, cursor: "pointer"
-      }}>취소</button>
-    </div>
-  );
-
   // ── 관리자 문제 입력 화면
   if (adminScreen) {
     const k = `${subject}|${adminScreen.partName}|${adminScreen.chapterName}`;

@@ -244,10 +244,6 @@ const leaderboard = [
 
 const typeColors = { "기출": "#FF4444", "기본서": "#FF8C00", "시그니처": "#CC0022" };
 
-// ── Supabase 설정
-const SUPABASE_URL = "https://dbwuoleivsvvxzjpptpf.supabase.co";
-const SUPABASE_KEY = "sb_publishable_aMiochfFzHsaqss5334w0Q_SgPeC4bj";
-
 export default function App() {
   // 로그인 상태
   const [session, setSession] = useState(null); // { access_token, user }

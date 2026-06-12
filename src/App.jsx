@@ -126,6 +126,34 @@ const api = {
       method: "DELETE",
       headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
     });
+  },
+  async getTips(subject, partName, chapterName) {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/tips?subject=eq.${encodeURIComponent(subject)}&part_name=eq.${encodeURIComponent(partName)}&chapter_name=eq.${encodeURIComponent(chapterName)}&order=created_at.asc`,
+        { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) return [];
+      return await res.json();
+    } catch(e) { return []; }
+  },
+  async addTip(subject, partName, chapterName, content) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/tips`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json", "Prefer": "return=representation"
+      },
+      body: JSON.stringify({ subject, part_name: partName, chapter_name: chapterName, content })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  },
+  async deleteTip(id) {
+    await fetch(`${SUPABASE_URL}/rest/v1/tips?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+    });
   }
 };
 
@@ -315,6 +343,12 @@ export default function App() {
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [savingMedia, setSavingMedia] = useState(false);
 
+  // 영철TIP 상태
+  const [tipScreen, setTipScreen] = useState(null); // { partName, chapterName, tips }
+  const [tipLoading, setTipLoading] = useState(false);
+  const [newTipContent, setNewTipContent] = useState("");
+  const [savingTip, setSavingTip] = useState(false);
+
   // Supabase에서 전체 문제 불러오기
   useEffect(() => {
     async function loadAll() {
@@ -363,6 +397,30 @@ export default function App() {
   async function deleteMediaLink(id, type) {
     await api.deleteMediaLink(id);
     setMediaLinks(prev => ({ ...prev, [type]: prev[type].filter(m => m.id !== id) }));
+  }
+
+  async function openTipScreen(partName, chapterName) {
+    setTipLoading(true);
+    setTipScreen({ partName, chapterName, tips: [] });
+    const tips = await api.getTips("관계법규", partName, chapterName);
+    setTipScreen({ partName, chapterName, tips });
+    setTipLoading(false);
+  }
+
+  async function saveTip() {
+    if (!newTipContent.trim() || !tipScreen) return;
+    setSavingTip(true);
+    try {
+      const rows = await api.addTip("관계법규", tipScreen.partName, tipScreen.chapterName, newTipContent.trim());
+      setTipScreen(prev => ({ ...prev, tips: [...prev.tips, rows[0]] }));
+      setNewTipContent("");
+    } catch(e) { alert("저장 실패: " + e.message); }
+    setSavingTip(false);
+  }
+
+  async function deleteTip(id) {
+    await api.deleteTip(id);
+    setTipScreen(prev => ({ ...prev, tips: prev.tips.filter(t => t.id !== id) }));
   }
 
   function getQuestions(subject, partName, chapterName) {
@@ -498,6 +556,91 @@ export default function App() {
   const parts = partsBySubject[subject] || partsBySubject["소방학"];
   const accentColor = subject === "관계법규" ? "#0077CC" : "#CC0022";
   const accentLight = subject === "관계법규" ? "#66AAFF" : "#FF4444";
+
+  // ── 영철TIP 화면
+  if (tipScreen) return (
+    <div style={{
+      minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0",
+      fontFamily: "'Noto Sans KR', sans-serif", maxWidth: 420, margin: "0 auto"
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet" />
+      {/* 헤더 */}
+      <div style={{
+        background: "linear-gradient(135deg, #0a1a0a, #0d2a0d)",
+        borderBottom: "2px solid #00AA44",
+        padding: "14px 20px", position: "sticky", top: 0, zIndex: 100,
+        display: "flex", alignItems: "center", gap: 10
+      }}>
+        <button onClick={() => { setTipScreen(null); setNewTipContent(""); }} style={{
+          background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8,
+          width: 32, height: 32, cursor: "pointer", color: "#aaa", fontSize: 16,
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }}>‹</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 900, color: "#00CC55" }}>💡 영철TIP</div>
+          <div style={{ fontSize: 10, color: "#555", marginTop: 1 }}>{tipScreen.chapterName}</div>
+        </div>
+        {isAdmin && <div style={{ fontSize: 10, color: "#8888FF", background: "rgba(85,85,255,0.15)", padding: "3px 8px", borderRadius: 20, border: "1px solid #5555FF55" }}>관리자</div>}
+      </div>
+
+      <div style={{ padding: 16, paddingBottom: 40 }}>
+        {/* 관리자 입력 폼 */}
+        {isAdmin && (
+          <div style={{ background: "#111", border: "1px solid #333", borderRadius: 14, padding: 16, marginBottom: 20 }}>
+            <div style={{ fontSize: 12, color: "#8888FF", fontWeight: 700, marginBottom: 10 }}>✏️ TIP 추가</div>
+            <textarea
+              placeholder="영철TIP 내용을 입력하세요..."
+              value={newTipContent}
+              onChange={e => setNewTipContent(e.target.value)}
+              rows={4}
+              style={{
+                width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #222",
+                background: "#0d0d0d", color: "#f0f0f0", fontSize: 13, lineHeight: 1.7,
+                resize: "none", outline: "none", marginBottom: 10, boxSizing: "border-box"
+              }}
+            />
+            <button onClick={saveTip} disabled={savingTip || !newTipContent.trim()} style={{
+              width: "100%", padding: "11px", borderRadius: 10, border: "none",
+              background: newTipContent.trim() && !savingTip ? "linear-gradient(135deg, #00AA44, #00CC55)" : "#1a1a1a",
+              color: newTipContent.trim() && !savingTip ? "#fff" : "#444",
+              fontSize: 13, fontWeight: 900, cursor: newTipContent.trim() ? "pointer" : "default"
+            }}>{savingTip ? "저장 중..." : "+ TIP 저장"}</button>
+          </div>
+        )}
+
+        {/* TIP 목록 */}
+        {tipLoading ? (
+          <div style={{ textAlign: "center", color: "#555", padding: 30 }}>불러오는 중...</div>
+        ) : tipScreen.tips.length === 0 ? (
+          <div style={{ background: "#111", borderRadius: 12, padding: 30, textAlign: "center", color: "#555" }}>
+            등록된 TIP이 없어요<br />
+            <span style={{ fontSize: 11, color: "#444" }}>관리자가 TIP을 추가하면 여기에 표시돼요</span>
+          </div>
+        ) : tipScreen.tips.map((tip, i) => (
+          <div key={tip.id} style={{
+            background: "linear-gradient(135deg, #0a1a0a, #0d200d)",
+            border: "1px solid #00AA4433",
+            borderRadius: 14, padding: 16, marginBottom: 10
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <div style={{
+                fontSize: 11, color: "#00CC55", fontWeight: 700,
+                background: "rgba(0,204,85,0.1)", padding: "2px 8px",
+                borderRadius: 20, border: "1px solid rgba(0,204,85,0.3)"
+              }}>💡 TIP {i + 1}</div>
+              {isAdmin && (
+                <button onClick={() => deleteTip(tip.id)} style={{
+                  background: "rgba(255,68,68,0.1)", border: "1px solid rgba(255,68,68,0.3)",
+                  borderRadius: 6, padding: "2px 8px", color: "#FF4444", fontSize: 10, cursor: "pointer"
+                }}>삭제</button>
+              )}
+            </div>
+            <div style={{ fontSize: 14, color: "#e0e0e0", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{tip.content}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   // ── 관리자 로그인 팝업 (세션 여부 관계없이 먼저 체크)
   if (showAdminLogin) return (
@@ -1084,6 +1227,14 @@ export default function App() {
                                 fontSize: 10, cursor: "pointer", marginRight: 4
                               }}>+ 입력</button>
                             )}
+                            {/* 관계법규: TIP 버튼 */}
+                            {subject === "관계법규" && (
+                              <button onClick={() => openTipScreen(p.name, ch)} style={{
+                                background: "rgba(0,170,68,0.15)", border: "1px solid rgba(0,170,68,0.4)",
+                                borderRadius: 6, padding: "3px 8px", color: "#00CC55",
+                                fontSize: 10, cursor: "pointer", marginRight: 4
+                              }}>💡TIP</button>
+                            )}
                             {/* 풀기 버튼 */}
                             <button onClick={() => startChapterQuiz(p.name, ch)} style={{
                               background: chQs.length > 0 ? `${accentColor}22` : "#1a1a1a",
@@ -1107,17 +1258,23 @@ export default function App() {
               {[
                 { icon: "📌", label: "오답노트", sub: `${wrongAnswerIds.length}개 저장됨`, action: () => setTab("weak") },
                 { icon: "📸", label: "소방시설 사진", sub: "기구 정리", action: () => setTab("photo") },
-                { icon: "▶️", label: "유튜브 강의", sub: "이해 영상", action: () => setTab("video") },
-                { icon: "☕", label: "영철소방 카페", sub: "cafe.naver.com", action: () => window.open("https://cafe.naver.com/lyc119", "_blank") },
+                subject === "관계법규"
+                  ? { icon: "💡", label: "영철TIP", sub: "핵심 정리", action: () => setTab("tip"), green: true }
+                  : { icon: "▶️", label: "유튜브 강의", sub: "이해 영상", action: () => setTab("video") },
+                { icon: "☕", label: "영철소방 카페", sub: "cafe.naver.com", action: () => window.open("https://cafe.naver.com/lyc119", "_blank"), cafe: true },
               ].map(item => (
                 <button key={item.label} onClick={item.action} style={{
-                  background: item.label === "영철소방 카페" ? "linear-gradient(135deg, #03C75A22, #03C75A11)" : "#111",
-                  border: item.label === "영철소방 카페" ? "1px solid #03C75A55" : "1px solid #222",
+                  background: item.cafe ? "linear-gradient(135deg, #03C75A22, #03C75A11)"
+                    : item.green ? "linear-gradient(135deg, #00AA4422, #00CC5511)"
+                    : "#111",
+                  border: item.cafe ? "1px solid #03C75A55"
+                    : item.green ? "1px solid rgba(0,170,68,0.4)"
+                    : "1px solid #222",
                   borderRadius: 12, padding: "14px 12px",
                   display: "flex", flexDirection: "column", gap: 4, textAlign: "left", cursor: "pointer"
                 }}>
                   <div style={{ fontSize: 22 }}>{item.icon}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: item.label === "영철소방 카페" ? "#03C75A" : "#fff" }}>{item.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: item.cafe ? "#03C75A" : item.green ? "#00CC55" : "#fff" }}>{item.label}</div>
                   <div style={{ fontSize: 11, color: "#666" }}>{item.sub}</div>
                 </button>
               ))}
@@ -1265,6 +1422,51 @@ export default function App() {
             })}
           </div>
         )}
+
+        {/* 영철TIP 탭 - 관계법규 파트/챕터 목록 */}
+        {tab === "tip" && subject === "관계법규" && (
+          <div style={{ padding: 16 }}>
+            <div style={{ fontSize: 12, color: "#00CC55", fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>💡 영철TIP</div>
+            {parts.map((p, i) => {
+              const isOpen = expandedPart === i + 1000;
+              return (
+                <div key={p.name} style={{ marginBottom: 8 }}>
+                  <div onClick={() => setExpandedPart(isOpen ? null : i + 1000)} style={{
+                    background: "#111", border: `1px solid ${isOpen ? "#00AA4466" : "#222"}`,
+                    borderRadius: isOpen ? "10px 10px 0 0" : 10, padding: "12px 14px", cursor: "pointer"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: isOpen ? "#fff" : "#ddd", flex: 1 }}>{p.name}</span>
+                      <span style={{ fontSize: 12, color: "#555" }}>{isOpen ? "▲" : "▼"}</span>
+                    </div>
+                  </div>
+                  {isOpen && (
+                    <div style={{ background: "#0d0d0d", border: "1px solid #00AA4444", borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+                      {p.chapters.length === 0 ? (
+                        <div style={{ padding: 16, textAlign: "center", fontSize: 12, color: "#444" }}>챕터 준비 중</div>
+                      ) : p.chapters.map((ch, ci) => (
+                        <div key={ci} onClick={() => openTipScreen(p.name, ch)} style={{
+                          display: "flex", alignItems: "center", gap: 10, padding: "11px 14px",
+                          borderBottom: ci < p.chapters.length - 1 ? "1px solid #1a1a1a" : "none",
+                          cursor: "pointer"
+                        }}>
+                          <div style={{
+                            width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                            background: "rgba(0,170,68,0.15)", border: "1px solid rgba(0,170,68,0.3)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 9, fontWeight: 700, color: "#00CC55"
+                          }}>{ci + 1}</div>
+                          <span style={{ fontSize: 12, color: "#bbb", flex: 1 }}>{ch}</span>
+                          <span style={{ fontSize: 11, color: "#00CC55" }}>💡 보기 ›</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 하단 네비 */}
@@ -1274,12 +1476,17 @@ export default function App() {
         borderTop: "1px solid #1e1e1e", display: "flex",
         boxShadow: "0 -4px 20px rgba(0,0,0,0.5)"
       }}>
-        {[
+        {(subject === "관계법규" ? [
+          { id: "home", icon: "🏠", label: "홈" },
+          { id: "weak", icon: "📌", label: "오답노트" },
+          { id: "photo", icon: "📸", label: "시설사진" },
+          { id: "tip", icon: "💡", label: "영철TIP" },
+        ] : [
           { id: "home", icon: "🏠", label: "홈" },
           { id: "weak", icon: "📌", label: "오답노트" },
           { id: "photo", icon: "📸", label: "시설사진" },
           { id: "video", icon: "▶️", label: "강의영상" },
-        ].map(t => (
+        ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             flex: 1, padding: "10px 0 8px", background: "none", border: "none",
             display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer"

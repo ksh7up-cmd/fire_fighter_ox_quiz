@@ -99,6 +99,33 @@ const api = {
       method: "DELETE",
       headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
     });
+  },
+  async getMediaLinks(type) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/media_links?type=eq.${type}&order=created_at.desc`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch(e) { return []; }
+  },
+  async addMediaLink(type, title, url) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/media_links`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json", "Prefer": "return=representation"
+      },
+      body: JSON.stringify({ type, title, url })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  },
+  async deleteMediaLink(id) {
+    await fetch(`${SUPABASE_URL}/rest/v1/media_links?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+    });
   }
 };
 
@@ -282,6 +309,11 @@ export default function App() {
   const [allQuestions, setAllQuestions] = useState({});
   const [loadingQ, setLoadingQ] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [mediaLinks, setMediaLinks] = useState({ photo: [], video: [] });
+  const [adminMediaTab, setAdminMediaTab] = useState("photo");
+  const [newMediaTitle, setNewMediaTitle] = useState("");
+  const [newMediaUrl, setNewMediaUrl] = useState("");
+  const [savingMedia, setSavingMedia] = useState(false);
 
   // Supabase에서 전체 문제 불러오기
   useEffect(() => {
@@ -1058,6 +1090,29 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {/* 네이버 카페 버튼 */}
+            <a href="https://cafe.naver.com/lyc119" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+              <div style={{
+                marginTop: 8,
+                background: "linear-gradient(135deg, #03C75A22, #03C75A11)",
+                border: "1px solid #03C75A55",
+                borderRadius: 12, padding: "14px 16px",
+                display: "flex", alignItems: "center", gap: 12, cursor: "pointer"
+              }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+                  background: "#03C75A",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 22
+                }}>☕</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: "#03C75A" }}>영철소방 네이버 카페</div>
+                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>cafe.naver.com/lyc119</div>
+                </div>
+                <div style={{ marginLeft: "auto", fontSize: 16, color: "#03C75A" }}>›</div>
+              </div>
+            </a>
           </div>
         )}
 

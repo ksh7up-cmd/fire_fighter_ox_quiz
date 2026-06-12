@@ -338,13 +338,20 @@ export default function App() {
 
   // 로그인 세션 복원
   useEffect(() => {
-    const saved = localStorage.getItem("hakyuk_session");
-    if (saved) {
-      const s = JSON.parse(saved);
-      setSession(s);
-      setNickname(s.nickname || "");
-      // 오답 불러오기
-      api.getWrongAnswers(s.user.id, s.access_token).then(ids => setWrongAnswerIds(ids));
+    try {
+      const saved = localStorage.getItem("hakyuk_session");
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s && s.user && s.user.id && s.access_token) {
+          setSession(s);
+          setNickname(s.nickname || "");
+          api.getWrongAnswers(s.user.id, s.access_token).then(ids => setWrongAnswerIds(ids));
+        } else {
+          localStorage.removeItem("hakyuk_session");
+        }
+      }
+    } catch(e) {
+      localStorage.removeItem("hakyuk_session");
     }
   }, []);
 

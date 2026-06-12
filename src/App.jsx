@@ -1,6 +1,106 @@
 import { useState, useEffect } from "react";
 
 const ADMIN_PASSWORD = "이영철1234";
+const SUPABASE_URL = "https://dbwuoleivsvvxzjpptpf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_aMiochfFzHsaqss5334w0Q_SgPeC4bj";
+
+// ── Supabase Auth 헬퍼
+const auth = {
+  async signUp(email, password, nickname) {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.msg || data.message || "회원가입 실패");
+    // 프로필(닉네임) 저장
+    if (data.user?.id) {
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${data.access_token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ id: data.user.id, nickname })
+      });
+    }
+    return data;
+  },
+  async signIn(email, password) {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.msg || data.error_description || "로그인 실패");
+    return data;
+  },
+  async getProfile(userId, token) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
+    });
+    const data = await res.json();
+    return data[0] || null;
+  }
+};
+
+// ── Supabase DB 헬퍼
+const api = {
+  async getAllQuestions() {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/questions?order=created_at.asc`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch(e) { return []; }
+  },
+  async addQuestion(subject, partName, chapterName, text, answer, type) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/questions`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json", "Prefer": "return=representation"
+      },
+      body: JSON.stringify({ subject, part_name: partName, chapter_name: chapterName, question_text: text, answer, question_type: type })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  },
+  async deleteQuestion(id) {
+    await fetch(`${SUPABASE_URL}/rest/v1/questions?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+    });
+  },
+  async getWrongAnswers(userId, token) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/wrong_answers?user_id=eq.${userId}&select=question_id`, {
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map(r => r.question_id);
+  },
+  async addWrongAnswer(userId, questionId, token) {
+    await fetch(`${SUPABASE_URL}/rest/v1/wrong_answers`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json", "Prefer": "resolution=ignore-duplicates"
+      },
+      body: JSON.stringify({ user_id: userId, question_id: questionId })
+    });
+  },
+  async removeWrongAnswer(userId, questionId, token) {
+    await fetch(`${SUPABASE_URL}/rest/v1/wrong_answers?user_id=eq.${userId}&question_id=eq.${questionId}`, {
+      method: "DELETE",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
+    });
+  }
+};
 
 const partsBySubject = {
   "소방학": [
@@ -148,65 +248,25 @@ const typeColors = { "기출": "#FF4444", "기본서": "#FF8C00", "시그니처"
 const SUPABASE_URL = "https://dbwuoleivsvvxzjpptpf.supabase.co";
 const SUPABASE_KEY = "sb_publishable_aMiochfFzHsaqss5334w0Q_SgPeC4bj";
 
-const api = {
-  async getQuestions(subject, partName, chapterName) {
-    try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/questions?subject=eq.${encodeURIComponent(subject)}&part_name=eq.${encodeURIComponent(partName)}&chapter_name=eq.${encodeURIComponent(chapterName)}&order=created_at.asc`,
-        { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
-      );
-      if (!res.ok) return [];
-      return await res.json();
-    } catch(e) { return []; }
-  },
-  async getAllQuestions() {
-    try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/questions?order=created_at.asc`,
-        { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
-      );
-      if (!res.ok) return [];
-      return await res.json();
-    } catch(e) { return []; }
-  },
-  async addQuestion(subject, partName, chapterName, text, answer, type) {
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/questions`, {
-        method: "POST",
-        headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": "application/json",
-          "Prefer": "return=representation"
-        },
-        body: JSON.stringify({
-          subject, part_name: partName, chapter_name: chapterName,
-          question_text: text, answer, question_type: type
-        })
-      });
-      if (!res.ok) { const e = await res.text(); throw new Error(e); }
-      return await res.json();
-    } catch(e) { throw e; }
-  },
-  async deleteQuestion(id) {
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/questions?id=eq.${id}`, {
-        method: "DELETE",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-      });
-    } catch(e) {}
-  }
-};
-
 export default function App() {
+  // 로그인 상태
+  const [session, setSession] = useState(null); // { access_token, user }
+  const [nickname, setNickname] = useState("");
+  const [authScreen, setAuthScreen] = useState("login"); // "login" | "signup"
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authNickname, setAuthNickname] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+
   const [subject, setSubject] = useState(null);
   const [tab, setTab] = useState("home");
   const [expandedPart, setExpandedPart] = useState(null);
   const [showLeader, setShowLeader] = useState(true);
-  const [savedWeak, setSavedWeak] = useState([]);
+  const [wrongAnswerIds, setWrongAnswerIds] = useState([]); // 개인 오답 id 목록
 
   // 챕터 퀴즈 상태
-  const [quizScreen, setQuizScreen] = useState(null); // { partName, chapterName, questions }
+  const [quizScreen, setQuizScreen] = useState(null);
   const [qIndex, setQIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState(null);
   const [showResult, setShowResult] = useState(false);
@@ -219,11 +279,11 @@ export default function App() {
   const [adminError, setAdminError] = useState("");
 
   // 문제 입력 상태 (관리자)
-  const [adminScreen, setAdminScreen] = useState(null); // { partName, chapterName }
+  const [adminScreen, setAdminScreen] = useState(null);
   const [newQText, setNewQText] = useState("");
   const [newQAnswer, setNewQAnswer] = useState(true);
   const [newQType, setNewQType] = useState("기출");
-  const [allQuestions, setAllQuestions] = useState({}); // { "subject|part|chapter": [...] }
+  const [allQuestions, setAllQuestions] = useState({});
   const [loadingQ, setLoadingQ] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -280,6 +340,63 @@ export default function App() {
     setAllQuestions(prev => ({ ...prev, [k]: (prev[k] || []).filter(q => q.id !== qId) }));
   }
 
+  // 로그인 세션 복원
+  useEffect(() => {
+    const saved = localStorage.getItem("hakyuk_session");
+    if (saved) {
+      const s = JSON.parse(saved);
+      setSession(s);
+      setNickname(s.nickname || "");
+      // 오답 불러오기
+      api.getWrongAnswers(s.user.id, s.access_token).then(ids => setWrongAnswerIds(ids));
+    }
+  }, []);
+
+  async function handleSignUp() {
+    if (!authEmail || !authPassword || !authNickname) { setAuthError("모든 항목을 입력해주세요"); return; }
+    if (authPassword.length < 6) { setAuthError("비밀번호는 6자 이상이어야 해요"); return; }
+    setAuthLoading(true); setAuthError("");
+    try {
+      const data = await auth.signUp(authEmail, authPassword, authNickname);
+      const s = { ...data, nickname: authNickname };
+      localStorage.setItem("hakyuk_session", JSON.stringify(s));
+      setSession(s); setNickname(authNickname);
+    } catch(e) { setAuthError(e.message); }
+    setAuthLoading(false);
+  }
+
+  async function handleSignIn() {
+    if (!authEmail || !authPassword) { setAuthError("이메일과 비밀번호를 입력해주세요"); return; }
+    setAuthLoading(true); setAuthError("");
+    try {
+      const data = await auth.signIn(authEmail, authPassword);
+      const profile = await auth.getProfile(data.user.id, data.access_token);
+      const s = { ...data, nickname: profile?.nickname || "수험생" };
+      localStorage.setItem("hakyuk_session", JSON.stringify(s));
+      setSession(s); setNickname(s.nickname);
+      const ids = await api.getWrongAnswers(data.user.id, data.access_token);
+      setWrongAnswerIds(ids);
+    } catch(e) { setAuthError(e.message); }
+    setAuthLoading(false);
+  }
+
+  function handleSignOut() {
+    localStorage.removeItem("hakyuk_session");
+    setSession(null); setNickname(""); setSubject(null);
+    setWrongAnswerIds([]); setIsAdmin(false);
+  }
+
+  async function toggleWeak(questionId) {
+    if (!session) return;
+    if (wrongAnswerIds.includes(questionId)) {
+      await api.removeWrongAnswer(session.user.id, questionId, session.access_token);
+      setWrongAnswerIds(prev => prev.filter(id => id !== questionId));
+    } else {
+      await api.addWrongAnswer(session.user.id, questionId, session.access_token);
+      setWrongAnswerIds(prev => [...prev, questionId]);
+    }
+  }
+
   function startChapterQuiz(partName, chapterName) {
     const qs = getQuestions(subject, partName, chapterName);
     if (qs.length === 0) { alert("아직 등록된 문제가 없어요!"); return; }
@@ -306,10 +423,6 @@ export default function App() {
     setShowResult(false);
   }
 
-  function toggleWeak(id) {
-    setSavedWeak(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
-
   function tryAdminLogin() {
     if (adminPwInput === ADMIN_PASSWORD) {
       setIsAdmin(true); setShowAdminLogin(false); setAdminError(""); setAdminPwInput("");
@@ -321,6 +434,75 @@ export default function App() {
   const parts = partsBySubject[subject] || partsBySubject["소방학"];
   const accentColor = subject === "관계법규" ? "#0077CC" : "#CC0022";
   const accentLight = subject === "관계법규" ? "#66AAFF" : "#FF4444";
+
+  // ── 로그인/회원가입 화면
+  if (!session) return (
+    <div style={{
+      minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0",
+      fontFamily: "'Noto Sans KR', sans-serif",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", maxWidth: 420, margin: "0 auto", padding: "0 24px"
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet" />
+      {/* 로고 */}
+      <div style={{ textAlign: "center", marginBottom: 36 }}>
+        <div style={{
+          width: 68, height: 68, borderRadius: 18, margin: "0 auto 14px",
+          background: "linear-gradient(135deg, #CC0022, #FF4444)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 34, boxShadow: "0 8px 30px rgba(204,0,34,0.4)"
+        }}>🔥</div>
+        <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>합격은 이영철</div>
+        <div style={{ fontSize: 11, color: "#FF6666", marginTop: 5, letterSpacing: 1 }}>소방공무원 시험 O·X 집중훈련</div>
+      </div>
+
+      {/* 탭 */}
+      <div style={{ display: "flex", width: "100%", marginBottom: 24, background: "#111", borderRadius: 12, padding: 4 }}>
+        {["login", "signup"].map(t => (
+          <button key={t} onClick={() => { setAuthScreen(t); setAuthError(""); }} style={{
+            flex: 1, padding: "10px", borderRadius: 9, border: "none", cursor: "pointer",
+            background: authScreen === t ? "linear-gradient(135deg, #CC0022, #FF4444)" : "none",
+            color: authScreen === t ? "#fff" : "#666",
+            fontSize: 13, fontWeight: 700
+          }}>{t === "login" ? "로그인" : "회원가입"}</button>
+        ))}
+      </div>
+
+      {/* 입력 폼 */}
+      <div style={{ width: "100%" }}>
+        {authScreen === "signup" && (
+          <input placeholder="닉네임 (예: 소방왕김철수)" value={authNickname}
+            onChange={e => setAuthNickname(e.target.value)}
+            style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #222",
+              background: "#111", color: "#fff", fontSize: 14, marginBottom: 10,
+              outline: "none", boxSizing: "border-box" }} />
+        )}
+        <input placeholder="이메일" value={authEmail} type="email"
+          onChange={e => setAuthEmail(e.target.value)}
+          style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #222",
+            background: "#111", color: "#fff", fontSize: 14, marginBottom: 10,
+            outline: "none", boxSizing: "border-box" }} />
+        <input placeholder="비밀번호 (6자 이상)" value={authPassword} type="password"
+          onChange={e => setAuthPassword(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && (authScreen === "login" ? handleSignIn() : handleSignUp())}
+          style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid #222",
+            background: "#111", color: "#fff", fontSize: 14, marginBottom: 14,
+            outline: "none", boxSizing: "border-box" }} />
+        {authError && <div style={{ color: "#FF4444", fontSize: 12, marginBottom: 10, textAlign: "center" }}>{authError}</div>}
+        <button onClick={authScreen === "login" ? handleSignIn : handleSignUp}
+          disabled={authLoading}
+          style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none",
+            background: authLoading ? "#333" : "linear-gradient(135deg, #CC0022, #FF4444)",
+            color: "#fff", fontSize: 15, fontWeight: 900, cursor: authLoading ? "default" : "pointer" }}>
+          {authLoading ? "처리 중..." : authScreen === "login" ? "로그인" : "회원가입"}
+        </button>
+      </div>
+
+      <button onClick={() => setShowAdminLogin(true)} style={{
+        marginTop: 32, background: "none", border: "none", color: "#333", fontSize: 11, cursor: "pointer"
+      }}>⚙ 관리자</button>
+    </div>
+  );
 
   // ── 관리자 로그인 팝업
   if (showAdminLogin) return (
@@ -627,11 +809,11 @@ export default function App() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => toggleWeak(q.id)} style={{
                   flex: 1, padding: "12px",
-                  background: savedWeak.includes(q.id) ? "rgba(255,140,0,0.2)" : "#111",
-                  border: `1px solid ${savedWeak.includes(q.id) ? "#FF8C00" : "#333"}`,
-                  borderRadius: 10, color: savedWeak.includes(q.id) ? "#FF8C00" : "#888",
+                  background: wrongAnswerIds.includes(q.id) ? "rgba(255,140,0,0.2)" : "#111",
+                  border: `1px solid ${wrongAnswerIds.includes(q.id) ? "#FF8C00" : "#333"}`,
+                  borderRadius: 10, color: wrongAnswerIds.includes(q.id) ? "#FF8C00" : "#888",
                   fontSize: 12, fontWeight: 700, cursor: "pointer"
-                }}>{savedWeak.includes(q.id) ? "📌 저장됨" : "📌 오답저장"}</button>
+                }}>{wrongAnswerIds.includes(q.id) ? "📌 저장됨" : "📌 오답저장"}</button>
                 <button onClick={nextQ} style={{
                   flex: 2, padding: "12px",
                   background: `linear-gradient(135deg, ${accentColor}, ${accentLight})`,
@@ -655,6 +837,14 @@ export default function App() {
       justifyContent: "center", maxWidth: 420, margin: "0 auto", padding: "0 24px"
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet" />
+      {/* 닉네임 + 로그아웃 */}
+      <div style={{ position: "absolute", top: 16, right: 24, display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 12, color: "#FF6666", fontWeight: 700 }}>👤 {nickname}</span>
+        <button onClick={handleSignOut} style={{
+          background: "rgba(255,68,68,0.1)", border: "1px solid rgba(255,68,68,0.3)",
+          borderRadius: 8, padding: "4px 10px", color: "#FF4444", fontSize: 11, cursor: "pointer"
+        }}>로그아웃</button>
+      </div>
       <div style={{ textAlign: "center", marginBottom: 48 }}>
         <div style={{
           width: 72, height: 72, borderRadius: 20, margin: "0 auto 16px",
@@ -850,7 +1040,7 @@ export default function App() {
             <div style={{ fontSize: 12, color: accentLight, fontWeight: 700, letterSpacing: 1, margin: "20px 0 10px" }}>빠른 접근</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {[
-                { icon: "📌", label: "오답노트", sub: `${savedWeak.length}개 저장됨`, action: () => setTab("weak") },
+                { icon: "📌", label: "오답노트", sub: `${wrongAnswerIds.length}개 저장됨`, action: () => setTab("weak") },
                 { icon: "📸", label: "소방시설 사진", sub: "기구 정리", action: () => setTab("photo") },
                 { icon: "▶️", label: "유튜브 강의", sub: "이해 영상", action: () => setTab("video") },
               ].map(item => (
@@ -871,15 +1061,39 @@ export default function App() {
         {tab === "weak" && (
           <div style={{ padding: 16 }}>
             <div style={{ fontSize: 12, color: "#FF8C00", fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>
-              📌 저장된 오답 ({savedWeak.length}개)
+              📌 {nickname}의 오답노트 ({wrongAnswerIds.length}개)
             </div>
-            {savedWeak.length === 0 ? (
+            {wrongAnswerIds.length === 0 ? (
               <div style={{ background: "#111", borderRadius: 12, padding: 30, textAlign: "center", color: "#555" }}>
                 저장된 오답이 없어요<br />
                 <span style={{ fontSize: 12, color: "#444" }}>문제 풀이 후 오답을 저장해보세요</span>
               </div>
             ) : (
-              <div style={{ textAlign: "center", color: "#666", fontSize: 13 }}>오답 문제 목록이 여기에 표시됩니다</div>
+              Object.values(allQuestions).flat()
+                .filter(q => wrongAnswerIds.includes(q.id))
+                .map((q, i) => (
+                  <div key={q.id} style={{
+                    background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: 14, marginBottom: 8
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontSize: 10, color: "#666" }}>#{i + 1}</span>
+                        <span style={{
+                          fontSize: 10, padding: "2px 7px", borderRadius: 20,
+                          background: typeColors[q.type] + "22", color: typeColors[q.type], fontWeight: 700
+                        }}>{q.type}</span>
+                      </div>
+                      <button onClick={() => toggleWeak(q.id)} style={{
+                        background: "rgba(255,68,68,0.1)", border: "1px solid rgba(255,68,68,0.3)",
+                        borderRadius: 6, padding: "3px 8px", color: "#FF4444", fontSize: 11, cursor: "pointer"
+                      }}>✕ 삭제</button>
+                    </div>
+                    <div style={{ fontSize: 13, color: "#ddd", lineHeight: 1.6, marginBottom: 6 }}>{q.text}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: q.answer ? "#00CC66" : "#FF4444" }}>
+                      정답: {q.answer ? "O" : "X"}
+                    </div>
+                  </div>
+                ))
             )}
           </div>
         )}
